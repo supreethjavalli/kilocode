@@ -17,6 +17,7 @@ import { getVercelAiGatewayModels } from "./vercel-ai-gateway"
 import { getRequestyModels } from "./requesty"
 import { getGlamaModels } from "./glama"
 import { getUnboundModels } from "./unbound"
+import { getOpenAiCompatibleModels } from "./openai-compatible"
 import { getLiteLLMModels } from "./litellm"
 import { GetModelsOptions } from "../../../shared/api"
 import { getKiloBaseUriFromToken } from "../../../shared/kilocode/token"
@@ -26,6 +27,7 @@ import { getIOIntelligenceModels } from "./io-intelligence"
 
 import { getDeepInfraModels } from "./deepinfra"
 import { getHuggingFaceModels } from "./huggingface"
+import { DEFAULT_OCA_BASE_URL } from "../oca/constants"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -64,7 +66,7 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 	}
 
 	try {
-		switch (provider) {
+		switch (options.provider) {
 			case "openrouter":
 				// kilocode_change start: base url and bearer token
 				models = await getOpenRouterModels({
@@ -85,9 +87,22 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				models = await getUnboundModels(options.apiKey)
 				break
 			case "litellm":
-				// Type safety ensures apiKey and baseUrl are always provided for LiteLLM.
 				models = await getLiteLLMModels(options.apiKey, options.baseUrl)
 				break
+			case "oca": {
+				const ids = await getOpenAiCompatibleModels(options.baseUrl ?? DEFAULT_OCA_BASE_URL, options.apiKey)
+				const record: ModelRecord = {}
+				for (const id of ids) {
+					record[id] = {
+						maxTokens: 8192,
+						contextWindow: 200000,
+						supportsPromptCache: false,
+						description: `${id} via OCA`,
+					}
+				}
+				models = record
+				break
+			}
 			// kilocode_change start
 			case "kilocode-openrouter":
 				models = await getOpenRouterModels({
@@ -120,8 +135,8 @@ export const getModels = async (options: GetModelsOptions): Promise<ModelRecord>
 				break
 			default: {
 				// Ensures router is exhaustively checked if RouterName is a strict union.
-				const exhaustiveCheck: never = provider
-				throw new Error(`Unknown provider: ${exhaustiveCheck}`)
+				const exhaustiveCheck: never = options as never
+				throw new Error("Unknown provider")
 			}
 		}
 

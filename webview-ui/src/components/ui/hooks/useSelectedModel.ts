@@ -295,6 +295,11 @@ function getSelectedModel({
 			const info = apiConfiguration?.openAiCustomModelInfo ?? openAiModelInfoSaneDefaults
 			return { id, info }
 		}
+		case "oca": {
+			const id = apiConfiguration.apiModelId ?? "auto"
+			const info = openAiModelInfoSaneDefaults
+			return { id, info }
+		}
 		case "ollama": {
 			const id = apiConfiguration.ollamaModelId ?? ""
 			const info = ollamaModels && ollamaModels[apiConfiguration.ollamaModelId!]
@@ -446,6 +451,7 @@ function getSelectedModel({
 				| "human-relay"
 				| "fake-ai"
 				| "kilocode-openrouter"
+				| "oca"
 			const id = apiConfiguration.apiModelId ?? anthropicDefaultModelId
 			const baseInfo = anthropicModels[id as keyof typeof anthropicModels]
 

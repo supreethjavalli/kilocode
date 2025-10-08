@@ -102,6 +102,8 @@ import {
 	Featherless,
 	VercelAiGateway,
 	DeepInfra,
+	// Note: OCA provider UI
+	OCA,
 } from "./providers"
 
 import { MODELS_BY_PROVIDER, PROVIDERS } from "./constants"
@@ -503,6 +505,17 @@ const ApiOptions = ({
 					selectedModelId={selectedModelId}
 					uriScheme={uriScheme}
 					fromWelcomeView={fromWelcomeView}
+					organizationAllowList={organizationAllowList}
+					modelValidationError={modelValidationError}
+				/>
+			)}
+
+			{selectedProvider === "oca" && (
+				<OCA
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+					routerModels={routerModels}
+					refetchRouterModels={refetchRouterModels}
 					organizationAllowList={organizationAllowList}
 					modelValidationError={modelValidationError}
 				/>

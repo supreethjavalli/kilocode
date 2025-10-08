@@ -290,6 +290,12 @@ export interface WebviewMessage {
 		| "editQueuedMessage"
 		| "dismissUpsell"
 		| "getDismissedUpsells"
+		| "oca/login"
+		| "oca/logout"
+		| "oca/show-auth-url"
+		| "oca/login-success"
+		| "oca/login-error"
+		| "oca/logout-success"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"

@@ -152,6 +152,10 @@ export interface ExtensionMessage {
 		| "commands"
 		| "insertTextIntoTextarea"
 		| "dismissedUpsells"
+		| "oca/show-auth-url"
+		| "oca/login-success"
+		| "oca/login-error"
+		| "oca/logout-success"
 		| "organizationSwitchResult"
 	text?: string
 	// kilocode_change start

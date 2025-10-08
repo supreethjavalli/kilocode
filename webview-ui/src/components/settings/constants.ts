@@ -92,6 +92,7 @@ export const PROVIDERS = [
 	// kilocode_change start
 	// { value: "roo", label: "Roo Code Cloud" },
 	// kilocode_change end
+	{ value: "oca", label: "Oracle Code Assist (IDCS)" },
 	{ value: "vercel-ai-gateway", label: "Vercel AI Gateway" },
 ].sort((a, b) => a.label.localeCompare(b.label))
 

@@ -37,7 +37,7 @@ import { ClineProvider } from "./ClineProvider"
 import { handleCheckpointRestoreOperation } from "./checkpointRestoreHandler"
 import { changeLanguage, t } from "../../i18n"
 import { Package } from "../../shared/package"
-import { type RouterName, type ModelRecord, toRouterName } from "../../shared/api"
+import { type RouterName, type ModelRecord, type RouterModels, toRouterName } from "../../shared/api"
 import { MessageEnhancer } from "./messageEnhancer"
 
 import {
@@ -81,6 +81,8 @@ import { setPendingTodoList } from "../tools/updateTodoListTool"
 import { UsageTracker } from "../../utils/usage-tracker"
 import { seeNewChanges } from "../checkpoints/kilocode/seeNewChanges" // kilocode_change
 import { getTaskHistory } from "../../shared/kilocode/getTaskHistory" // kilocode_change
+import { ensureOcaTokenAndGetAccessToken } from "../../api/providers/oca"
+import { DEFAULT_OCA_BASE_URL } from "../../api/providers/oca/constants"
 
 export const webviewMessageHandler = async (
 	provider: ClineProvider,
@@ -795,6 +797,7 @@ export const webviewMessageHandler = async (
 				huggingface: {},
 				litellm: {},
 				"kilocode-openrouter": {}, // kilocode_change
+				oca: {},
 				deepinfra: {},
 				"io-intelligence": {},
 				requesty: {},
@@ -856,6 +859,28 @@ export const webviewMessageHandler = async (
 				},
 			]
 			// kilocode_change end
+
+			// Add OCA models fetch if selected provider is OCA.
+			if (apiConfiguration.apiProvider === "oca") {
+				try {
+					const ocaAccessToken = await ensureOcaTokenAndGetAccessToken(provider.context, (url: string) => {
+						provider.postMessageToWebview({ type: "oca/show-auth-url", url })
+					})
+					modelFetchPromises.push({
+						key: "oca",
+						options: {
+							provider: "oca",
+							apiKey: ocaAccessToken,
+							baseUrl:
+								process.env.OCA_API_BASE ??
+								"https://code-internal.aiservice.us-chicago-1.oci.oraclecloud.com/20250519/app/litellm/",
+						} as GetModelsOptions,
+					})
+				} catch {
+					// User hasn't completed OCA auth; skip OCA models for now.
+					console.debug("Skipping OCA model fetch (no valid token).")
+				}
+			}
 
 			// Add IO Intelligence if API key is provided.
 			const ioIntelligenceApiKey = apiConfiguration.ioIntelligenceApiKey
@@ -1023,6 +1048,33 @@ export const webviewMessageHandler = async (
 				vscode.env.openExternal(vscode.Uri.parse(message.url))
 			}
 			break
+		case "oca/login": {
+			ensureOcaTokenAndGetAccessToken(provider.context, (url: string) => {
+				provider.postMessageToWebview({ type: "oca/show-auth-url", url })
+			})
+				.then(async () => {
+					await provider.postMessageToWebview({ type: "oca/login-success" })
+				})
+				.catch(async (error) => {
+					await provider.postMessageToWebview({
+						type: "oca/login-error",
+						error: error instanceof Error ? error.message : String(error),
+					})
+				})
+			break
+		}
+		case "oca/logout": {
+			try {
+				await provider.context.secrets.delete("ocaTokenSet")
+				await provider.postMessageToWebview({ type: "oca/logout-success" })
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "oca/login-error",
+					error: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
 		case "checkpointDiff":
 			const result = checkoutDiffPayloadSchema.safeParse(message.payload)
 
@@ -2025,9 +2077,24 @@ export const webviewMessageHandler = async (
 							kilocodeOrganizationId: message.apiConfiguration.kilocodeOrganizationId,
 							kilocodeToken: message.apiConfiguration.kilocodeToken,
 						})
+						const routerModelsUpdate: RouterModels = {
+							openrouter: {},
+							"vercel-ai-gateway": {},
+							huggingface: {},
+							litellm: {},
+							"kilocode-openrouter": models,
+							oca: {},
+							deepinfra: {},
+							"io-intelligence": {},
+							requesty: {},
+							unbound: {},
+							glama: {},
+							ollama: {},
+							lmstudio: {},
+						}
 						provider.postMessageToWebview({
 							type: "routerModels",
-							routerModels: { "kilocode-openrouter": models } as Record<RouterName, ModelRecord>,
+							routerModels: routerModelsUpdate,
 						})
 					}
 				} catch (error) {
