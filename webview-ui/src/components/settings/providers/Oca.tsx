@@ -57,8 +57,11 @@ export function OCA({
 			if (m?.type === "oca/login-success") {
 				setStatus("done")
 				setError(null)
-				// After successful login, refresh models so the dropdown appears
+				// After successful login, flush and refresh models so the dropdown appears
+				// vscode.postMessage({ type: "flushRouterModels", text: "oca" })
+				// setTimeout(() => {
 				requestOcaModels()
+				// }, 300)
 			}
 			if (m?.type === "oca/login-error") {
 				setStatus("error")
@@ -69,10 +72,25 @@ export function OCA({
 				setAuthUrl(null)
 				setError(null)
 			}
+			if (m?.type === "oca/status") {
+				if (m.authenticated) {
+					setStatus("done")
+					setError(null)
+					// Do not auto-fetch models; user can refresh explicitly.
+				} else {
+					setStatus("idle")
+				}
+			}
 		}
 		window.addEventListener("message", h)
 		return () => window.removeEventListener("message", h)
 	}, [requestOcaModels])
+
+	// On mount, passively check OCA auth status so returning users see correct state.
+	// This does not initiate authentication or fetch models.
+	React.useEffect(() => {
+		vscode.postMessage({ type: "oca/status" })
+	}, [])
 
 	return (
 		<div className="provider-card">
@@ -93,29 +111,29 @@ export function OCA({
 					<p>After completing sign-in, return here. This page will update automatically.</p>
 				</>
 			)}
-
 			{status === "done" && (
 				<div className="flex items-center gap-2">
-					<p>✅ Signed in.</p>
 					<VSCodeButton onClick={requestOcaModels}>Refresh models</VSCodeButton>
 				</div>
 			)}
-			{status === "error" && <p>❌ {error}</p>}
 
-			{/* Model picker appears once models are available */}
-			<div className="mt-3">
-				<ModelPicker
-					apiConfiguration={apiConfiguration}
-					setApiConfigurationField={setApiConfigurationField}
-					defaultModelId={defaultModelId}
-					models={ocaModels}
-					modelIdKey="apiModelId"
-					serviceName="Oracle Code Assist"
-					serviceUrl=""
-					organizationAllowList={organizationAllowList}
-					errorMessage={modelValidationError}
-				/>
-			</div>
+			{status === "done" && Object.keys(ocaModels).length > 0 && (
+				<div className="mt-3">
+					<ModelPicker
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setApiConfigurationField}
+						defaultModelId={defaultModelId}
+						models={ocaModels}
+						modelIdKey="apiModelId"
+						serviceName="Oracle Code Assist"
+						serviceUrl=""
+						organizationAllowList={organizationAllowList}
+						errorMessage={modelValidationError}
+					/>
+				</div>
+			)}
+
+			{status === "error" && <p>❌ {error}</p>}
 
 			<div style={{ marginTop: 8 }}>
 				<VSCodeButton onClick={() => vscode.postMessage({ type: "oca/logout" })}>Sign out</VSCodeButton>

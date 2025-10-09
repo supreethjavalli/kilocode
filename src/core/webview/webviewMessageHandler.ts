@@ -81,8 +81,7 @@ import { setPendingTodoList } from "../tools/updateTodoListTool"
 import { UsageTracker } from "../../utils/usage-tracker"
 import { seeNewChanges } from "../checkpoints/kilocode/seeNewChanges" // kilocode_change
 import { getTaskHistory } from "../../shared/kilocode/getTaskHistory" // kilocode_change
-import { ensureOcaTokenAndGetAccessToken } from "../../api/providers/oca"
-import { DEFAULT_OCA_BASE_URL } from "../../api/providers/oca/constants"
+import { OcaTokenManager } from "../../api/providers/oca/OcaTokenManager"
 
 export const webviewMessageHandler = async (
 	provider: ClineProvider,
@@ -860,26 +859,26 @@ export const webviewMessageHandler = async (
 			]
 			// kilocode_change end
 
-			// Add OCA models fetch if selected provider is OCA.
-			if (apiConfiguration.apiProvider === "oca") {
-				try {
-					const ocaAccessToken = await ensureOcaTokenAndGetAccessToken(provider.context, (url: string) => {
-						provider.postMessageToWebview({ type: "oca/show-auth-url", url })
-					})
+			// Add OCA models fetch when the user is authenticated (token exists), regardless of selected provider.
+			// Do NOT trigger auth automatically; only use existing valid token.
+			try {
+				const valid = await OcaTokenManager.getValid()
+				if (valid?.access_token) {
 					modelFetchPromises.push({
 						key: "oca",
 						options: {
 							provider: "oca",
-							apiKey: ocaAccessToken,
+							apiKey: valid.access_token,
 							baseUrl:
 								process.env.OCA_API_BASE ??
 								"https://code-internal.aiservice.us-chicago-1.oci.oraclecloud.com/20250519/app/litellm/",
 						} as GetModelsOptions,
 					})
-				} catch {
-					// User hasn't completed OCA auth; skip OCA models for now.
-					console.debug("Skipping OCA model fetch (no valid token).")
+				} else {
+					console.debug("Skipping OCA model fetch (no token present; user must Sign in).")
 				}
+			} catch (e) {
+				console.debug("Skipping OCA model fetch (error while checking token).", e)
 			}
 
 			// Add IO Intelligence if API key is provided.
@@ -1049,13 +1048,13 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "oca/login": {
-			ensureOcaTokenAndGetAccessToken(provider.context, (url: string) => {
+			OcaTokenManager.loginWithoutAutoOpen((url: string) => {
 				provider.postMessageToWebview({ type: "oca/show-auth-url", url })
 			})
 				.then(async () => {
 					await provider.postMessageToWebview({ type: "oca/login-success" })
 				})
-				.catch(async (error) => {
+				.catch(async (error: unknown) => {
 					await provider.postMessageToWebview({
 						type: "oca/login-error",
 						error: error instanceof Error ? error.message : String(error),
@@ -1065,12 +1064,31 @@ export const webviewMessageHandler = async (
 		}
 		case "oca/logout": {
 			try {
-				await provider.context.secrets.delete("ocaTokenSet")
+				await OcaTokenManager.logout()
+				// Best-effort cleanup for any legacy secret usage
+				try {
+					await provider.context.secrets.delete("ocaTokenSet")
+				} catch {}
 				await provider.postMessageToWebview({ type: "oca/logout-success" })
 			} catch (error) {
 				await provider.postMessageToWebview({
 					type: "oca/login-error",
 					error: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
+		case "oca/status": {
+			try {
+				const valid = await OcaTokenManager.getValid()
+				await provider.postMessageToWebview({
+					type: "oca/status",
+					authenticated: !!valid?.access_token,
+				})
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "oca/status",
+					authenticated: false,
 				})
 			}
 			break

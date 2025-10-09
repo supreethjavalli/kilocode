@@ -155,6 +155,7 @@ export interface ExtensionMessage {
 		| "oca/show-auth-url"
 		| "oca/login-success"
 		| "oca/login-error"
+		| "oca/status"
 		| "oca/logout-success"
 		| "organizationSwitchResult"
 	text?: string
@@ -231,6 +232,7 @@ export interface ExtensionMessage {
 		message: string
 	} // kilocode_change
 	url?: string // kilocode_change
+	authenticated?: boolean
 	keybindings?: Record<string, string> // kilocode_change
 	setting?: string
 	value?: any

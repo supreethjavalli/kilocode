@@ -64,47 +64,67 @@ export async function getOpenAiCompatibleModels(
 	openAiHeaders?: Record<string, string>,
 ) {
 	try {
+		if (!baseUrl) return []
+
+		// Construct robust URLs and normalize path (try /v1/models then /v1/model/info)
+		const normalized = new URL(baseUrl)
+		const basePath = normalized.pathname.replace(/\/+$/, "").replace(/\/+/g, "/")
+		const urlModels = new URL(normalized.href)
+		urlModels.pathname = basePath + "/v1/models"
+		const urlModelInfo = new URL(normalized.href)
+		urlModelInfo.pathname = basePath + "/v1/model/info"
+
+		// Merge headers: global defaults + caller overrides + auth
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
 			...DEFAULT_HEADERS,
+			...(openAiHeaders || {}),
 		}
-
 		if (apiKey) {
 			headers["Authorization"] = `Bearer ${apiKey}`
 		}
-		// Use URL constructor to properly join base URL and path
-		// This approach handles all edge cases including paths, query params, and fragments
-		const urlObj = new URL(baseUrl)
-		// Normalize the pathname by removing trailing slashes and multiple slashes
-		urlObj.pathname = urlObj.pathname.replace(/\/+$/, "").replace(/\/+/g, "/") + "/v1/model/info"
-		const url = urlObj.href
-		// Added timeout to prevent indefinite hanging
-		const response = await axios.get(url, { headers, timeout: 5000 })
-		const models: ModelRecord = {}
 
-		const computerModels = Array.from(LITELLM_COMPUTER_USE_MODELS)
-
-		// Process the model info from the response
-		if (response.data && response.data.data && Array.isArray(response.data.data)) {
-			const modelsArray = response.data?.data?.map((model: any) => model.id) || []
-			return [...new Set<string>(modelsArray)]
-		} else {
-			// If response.data.data is not in the expected format, consider it an error.
-			console.error("Error fetching LiteLLM models: Unexpected response format", response.data)
-			throw new Error("Failed to fetch LiteLLM models: Unexpected response format.")
+		// Helper to try an endpoint and parse ids
+		const tryFetchIds = async (endpoint: string): Promise<string[] | null> => {
+			try {
+				const resp = await axios.get(endpoint, { headers, timeout: 5000 })
+				const arr = resp?.data?.data
+				if (Array.isArray(arr)) {
+					const ids = arr.map((m: any) => m?.id).filter((id: any) => typeof id === "string")
+					return [...new Set<string>(ids)]
+				}
+				return null
+			} catch {
+				return null
+			}
 		}
+
+		// Try /v1/models first, then fallback to /v1/model/info
+		const idsFromModels = await tryFetchIds(urlModels.href)
+		if (idsFromModels && idsFromModels.length > 0) {
+			return idsFromModels
+		}
+		const idsFromModelInfo = await tryFetchIds(urlModelInfo.href)
+		if (idsFromModelInfo && idsFromModelInfo.length > 0) {
+			return idsFromModelInfo
+		}
+
+		throw new Error(
+			"Failed to fetch OpenAI-compatible models: no supported models endpoint found (tried /v1/models and /v1/model/info)",
+		)
 	} catch (error: any) {
-		console.error("Error fetching LiteLLM models:", error.message ? error.message : error)
-		if (axios.isAxiosError(error) && error.response) {
-			throw new Error(
-				`Failed to fetch LiteLLM models: ${error.response.status} ${error.response.statusText}. Check base URL and API key.`,
-			)
-		} else if (axios.isAxiosError(error) && error.request) {
-			throw new Error(
-				"Failed to fetch LiteLLM models: No response from server. Check LiteLLM server status and base URL.",
-			)
-		} else {
-			throw new Error(`Failed to fetch LiteLLM models: ${error.message || "An unknown error occurred."}`)
+		if (axios.isAxiosError(error)) {
+			if (error.response) {
+				throw new Error(
+					`Failed to fetch OpenAI-compatible models: ${error.response.status} ${error.response.statusText}. Check base URL and API key.`,
+				)
+			}
+			if (error.request) {
+				throw new Error(
+					"Failed to fetch OpenAI-compatible models: No response from server. Check server status and base URL.",
+				)
+			}
 		}
+		throw new Error(`Failed to fetch OpenAI-compatible models: ${error?.message || String(error)}`)
 	}
 }

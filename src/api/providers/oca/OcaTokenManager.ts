@@ -222,4 +222,18 @@ export class OcaTokenManager {
 		this.cached = tokenSet
 		return tokenSet
 	}
+
+	public static async logout(): Promise<void> {
+		try {
+			// Clear in-memory state
+			this.cached = null
+			this.inflightLogin = null
+			// Remove cached token file
+			try {
+				await fs.rm(TOKEN_CACHE_PATH, { force: true })
+			} catch {}
+		} catch (e) {
+			console.error("OCA: logout failed:", e)
+		}
+	}
 }

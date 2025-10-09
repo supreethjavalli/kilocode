@@ -296,8 +296,8 @@ function getSelectedModel({
 			return { id, info }
 		}
 		case "oca": {
-			const id = apiConfiguration.apiModelId ?? "auto"
-			const info = openAiModelInfoSaneDefaults
+			const id = apiConfiguration.apiModelId ?? ""
+			const info = undefined
 			return { id, info }
 		}
 		case "ollama": {
